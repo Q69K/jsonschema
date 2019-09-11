@@ -2,6 +2,57 @@
   "$schema": "http:\/\/json-schema.org\/draft-04\/schema#",
   "$ref": "#\/definitions\/TestUser",
   "definitions": {
+    "AorB": {
+      "additionalProperties": false,
+      "oneOf": [
+        {
+          "$schema": "http://json-schema.org/draft-04/schema#",
+          "$ref": "#/definitions/A@type:a"
+        },
+        {
+          "$schema": "http://json-schema.org/draft-04/schema#",
+          "$ref": "#/definitions/B@type:b"
+        }
+      ]
+    },
+    "A@type:a": {
+      "required": [
+        "type"
+      ],
+      "properties": {
+        "name_a": {
+          "type": "string"
+        },
+        "type": {
+          "default": "a",
+          "enum": [
+            "a"
+          ],
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "B@type:b": {
+      "required": [
+        "type"
+      ],
+      "properties": {
+        "name_b": {
+          "type": "string"
+        },
+        "type": {
+          "default": "b",
+          "enum": [
+            "b"
+          ],
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
     "GrandfatherType": {
       "required": [
         "family_name"
@@ -31,7 +82,11 @@
         "TestFlag": {
           "type": "boolean"
         },
-        "age":{
+        "a_or_b":{
+          "$schema": "http:\/\/json-schema.org\/draft-04\/schema#",
+          "$ref": "#\/definitions\/AorB"
+        },
+        "age": {
           "maximum": 120,
           "minimum": 18,
           "exclusiveMaximum": true,
@@ -100,11 +155,9 @@
           "type": "integer"
         },
         "tags": {
-          "patternProperties": {
-            ".*": {
-              "additionalProperties": true,
-              "type": "object"
-            }
+          "additionalProperties": {
+            "additionalProperties": true,
+            "type": "object"
           },
           "type": "object"
         },

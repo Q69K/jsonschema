@@ -7,10 +7,12 @@
 package jsonschema
 
 import (
-	"encoding/json"
+	"errors"
+	"fmt"
 	"net"
 	"net/url"
 	"reflect"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -52,7 +54,7 @@ type Type struct {
 	Required             []string         `json:"required,omitempty"`             // section 5.15
 	Properties           map[string]*Type `json:"properties,omitempty"`           // section 5.16
 	PatternProperties    map[string]*Type `json:"patternProperties,omitempty"`    // section 5.17
-	AdditionalProperties json.RawMessage  `json:"additionalProperties,omitempty"` // section 5.18
+	AdditionalProperties interface{}      `json:"additionalProperties,omitempty"` // section 5.18
 	Dependencies         map[string]*Type `json:"dependencies,omitempty"`         // section 5.19
 	Enum                 []interface{}    `json:"enum,omitempty"`                 // section 5.20
 	Type                 string           `json:"type,omitempty"`                 // section 5.21
@@ -107,6 +109,14 @@ type Reflector struct {
 
 	// TypeMapper is a function that can be used to map custom Go types to jsconschema types.
 	TypeMapper func(reflect.Type) *Type
+
+	DiscriminatedTypes []DiscriminatorType
+}
+
+type DiscriminatorType struct {
+	BaseType           reflect.Type
+	DiscriminatorField string
+	Ancestors          map[string]reflect.Type
 }
 
 // Reflect reflects to Schema from a value.
@@ -122,10 +132,7 @@ func (r *Reflector) ReflectFromType(t reflect.Type) *Schema {
 			Version:              Version,
 			Type:                 "object",
 			Properties:           map[string]*Type{},
-			AdditionalProperties: []byte("false"),
-		}
-		if r.AllowAdditionalProperties {
-			st.AdditionalProperties = []byte("true")
+			AdditionalProperties: r.AllowAdditionalProperties,
 		}
 		r.reflectStructFields(st, definitions, t)
 		r.reflectStruct(definitions, t)
@@ -138,6 +145,26 @@ func (r *Reflector) ReflectFromType(t reflect.Type) *Schema {
 		Definitions: definitions,
 	}
 	return s
+}
+
+func (r *Reflector) RegisterDiscriminatorType(baseType reflect.Type, discriminatorField string, ancestors map[string]reflect.Type) error {
+	if baseType.Kind() != reflect.Interface {
+		return errors.New(fmt.Sprintf("base type %s should be an interface", baseType.Name()))
+	}
+
+	for _, t := range ancestors {
+		if !t.Implements(baseType) {
+			return errors.New(fmt.Sprintf("type %s should implement %s", t.Name(), baseType.Name()))
+		}
+	}
+
+	r.DiscriminatedTypes = append(r.DiscriminatedTypes, DiscriminatorType{
+		BaseType:           baseType,
+		DiscriminatorField: discriminatorField,
+		Ancestors:          ancestors,
+	})
+
+	return nil
 }
 
 // Definitions hold schema definitions.
@@ -206,14 +233,11 @@ func (r *Reflector) reflectTypeToSchema(definitions Definitions, t reflect.Type)
 		}
 
 	case reflect.Map:
-		rt := &Type{
-			Type: "object",
-			PatternProperties: map[string]*Type{
-				".*": r.reflectTypeToSchema(definitions, t.Elem()),
-			},
+		valueSchema := r.reflectTypeToSchema(definitions, t.Elem())
+		return &Type{
+			Type:                 "object",
+			AdditionalProperties: valueSchema,
 		}
-		delete(rt.PatternProperties, "additionalProperties")
-		return rt
 
 	case reflect.Slice, reflect.Array:
 		returnType := &Type{}
@@ -233,9 +257,32 @@ func (r *Reflector) reflectTypeToSchema(definitions Definitions, t reflect.Type)
 		}
 
 	case reflect.Interface:
-		return &Type{
-			Type:                 "object",
-			AdditionalProperties: []byte("true"),
+		var schema *Type
+		d := r.getDiscriminator(t)
+		if d != nil {
+			ancestorTypes := make([]*Type, 0)
+			for dKey, anc := range d.Ancestors {
+				ancRef := r.reflectDiscriminatedStruct(definitions, anc, d.DiscriminatorField, dKey)
+				ancRef.Title = dKey
+				ancestorTypes = append(ancestorTypes, ancRef)
+			}
+			sort.Slice(ancestorTypes, func(i, j int) bool {
+				return ancestorTypes[i].Ref < ancestorTypes[j].Ref
+			})
+			schema = &Type{
+				OneOf:                ancestorTypes,
+				AdditionalProperties: false,
+			}
+		} else {
+			schema = &Type{
+				Type:                 "object",
+				AdditionalProperties: true,
+			}
+		}
+		if t.Name() != "" {
+			return addToDefinitions(definitions, t.Name(), schema)
+		} else {
+			return schema
 		}
 
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
@@ -257,38 +304,82 @@ func (r *Reflector) reflectTypeToSchema(definitions Definitions, t reflect.Type)
 	panic("unsupported type " + t.String())
 }
 
-// Refects a struct to a JSON Schema type.
-func (r *Reflector) reflectStruct(definitions Definitions, t reflect.Type) *Type {
-	for _, ignored := range r.IgnoredTypes {
-		if reflect.TypeOf(ignored) == t {
-			st := &Type{
-				Type:                 "object",
-				Properties:           map[string]*Type{},
-				AdditionalProperties: []byte("true"),
-			}
-			definitions[t.Name()] = st
-
-			return &Type{
-				Version: Version,
-				Ref:     "#/definitions/" + t.Name(),
-			}
-
+func (r *Reflector) getDiscriminator(t reflect.Type) *DiscriminatorType {
+	for _, d := range r.DiscriminatedTypes {
+		if d.BaseType == t {
+			return &d
 		}
 	}
-	st := &Type{
-		Type:                 "object",
-		Properties:           map[string]*Type{},
-		AdditionalProperties: []byte("false"),
-	}
-	if r.AllowAdditionalProperties {
-		st.AdditionalProperties = []byte("true")
-	}
-	definitions[t.Name()] = st
-	r.reflectStructFields(st, definitions, t)
+	return nil
+}
 
+func emptyObjectSchema(additionalProperties bool) *Type {
+	if additionalProperties {
+		return &Type{
+			Type:                 "object",
+			Properties:           map[string]*Type{},
+			AdditionalProperties: true,
+		}
+	} else {
+		return &Type{
+			Type:                 "object",
+			Properties:           map[string]*Type{},
+			AdditionalProperties: false,
+		}
+	}
+}
+
+// Refects a struct to a JSON Schema type.
+func (r *Reflector) reflectStruct(definitions Definitions, t reflect.Type) *Type {
+	isIgnored := r.isIgnored(t)
+	st := emptyObjectSchema(r.AllowAdditionalProperties || isIgnored)
+	if !isIgnored {
+		r.reflectStructFields(st, definitions, t)
+	}
+
+	return addToDefinitions(definitions, t.Name(), st)
+}
+
+func (r *Reflector) reflectDiscriminatedStruct(definitions Definitions, t reflect.Type, dField, dKey string) *Type {
+	defName := fmt.Sprintf("%s@%s:%s", t.Name(), dField, dKey)
+
+	isIgnored := r.isIgnored(t)
+	st := emptyObjectSchema(r.AllowAdditionalProperties || isIgnored)
+	st.Properties[dField] = getConstStringType(dKey)
+	st.Required = append(st.Required, dField)
+	if !isIgnored {
+		r.reflectStructFields(st, definitions, t)
+	}
+
+	return addToDefinitions(definitions, defName, st)
+}
+
+func addToDefinitions(definitions Definitions, name string, typ *Type) *Type {
+	definitions[name] = typ
+	return getTypeRef(name)
+}
+
+func (r *Reflector) isIgnored(t reflect.Type) bool {
+	for _, ignored := range r.IgnoredTypes {
+		if reflect.TypeOf(ignored) == t {
+			return true
+		}
+	}
+	return false
+}
+
+func getTypeRef(name string) *Type {
 	return &Type{
 		Version: Version,
-		Ref:     "#/definitions/" + t.Name(),
+		Ref:     "#/definitions/" + name,
+	}
+}
+
+func getConstStringType(value string) *Type {
+	return &Type{
+		Type:    "string",
+		Default: value,
+		Enum:    []interface{}{value},
 	}
 }
 

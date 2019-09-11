@@ -49,6 +49,18 @@ const (
 	Great
 )
 
+type AorB interface{}
+
+type A struct {
+	AorB
+	NameA string `json:"name_a"`
+}
+
+type B struct {
+	AorB
+	NameB string `json:"name_b"`
+}
+
 type TestUser struct {
 	SomeBaseType
 	nonExported
@@ -74,6 +86,8 @@ type TestUser struct {
 	Feeling ProtoEnum `json:"feeling,omitempty"`
 	Age     int       `json:"age" jsonschema:"minimum=18,maximum=120,exclusiveMaximum=true,exclusiveMinimum=true"`
 	Email   string    `json:"email" jsonschema:"format=email"`
+
+	AorB AorB `json:"a_or_b"`
 }
 
 type CustomTime time.Time
@@ -92,7 +106,7 @@ func TestSchemaGeneration(t *testing.T) {
 		{&TestUser{}, &Reflector{AllowAdditionalProperties: true}, "fixtures/allow_additional_props.json"},
 		{&TestUser{}, &Reflector{RequiredFromJSONSchemaTags: true}, "fixtures/required_from_jsontags.json"},
 		{&TestUser{}, &Reflector{ExpandedStruct: true}, "fixtures/defaults_expanded_toplevel.json"},
-		{&TestUser{}, &Reflector{IgnoredTypes: []interface{}{GrandfatherType{}}}, "fixtures/ignore_type.json"},
+		{&TestUser{}, &Reflector{IgnoredTypes: []interface{}{GrandfatherType{}, A{}, B{}}}, "fixtures/ignore_type.json"},
 		{&CustomTypeField{}, &Reflector{
 			TypeMapper: func(i reflect.Type) *Type {
 				if i == reflect.TypeOf(CustomTime{}) {
@@ -110,6 +124,15 @@ func TestSchemaGeneration(t *testing.T) {
 		name := strings.TrimSuffix(filepath.Base(tt.fixture), ".json")
 		t.Run(name, func(t *testing.T) {
 			f, err := ioutil.ReadFile(tt.fixture)
+			require.NoError(t, err)
+
+			err = tt.reflector.RegisterDiscriminatorType(
+				reflect.TypeOf((*AorB)(nil)).Elem(),
+				"type", map[string]reflect.Type{
+					"a": reflect.TypeOf(A{}),
+					"b": reflect.TypeOf(B{}),
+				},
+			)
 			require.NoError(t, err)
 
 			actualSchema := tt.reflector.Reflect(tt.typ)
