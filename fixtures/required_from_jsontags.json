@@ -7,11 +7,13 @@
       "oneOf": [
         {
           "$schema": "http://json-schema.org/draft-04/schema#",
-          "$ref": "#/definitions/A@type:a"
+          "$ref": "#/definitions/A@type:a",
+          "title": "a"
         },
         {
           "$schema": "http://json-schema.org/draft-04/schema#",
-          "$ref": "#/definitions/B@type:b"
+          "$ref": "#/definitions/B@type:b",
+          "title": "b"
         }
       ]
     },

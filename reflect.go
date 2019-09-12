@@ -111,12 +111,18 @@ type Reflector struct {
 	TypeMapper func(reflect.Type) *Type
 
 	DiscriminatedTypes []DiscriminatorType
+	EnumTypes          []EnumType
 }
 
 type DiscriminatorType struct {
 	BaseType           reflect.Type
 	DiscriminatorField string
 	Ancestors          map[string]reflect.Type
+}
+
+type EnumType struct {
+	Type   reflect.Type
+	Values []interface{}
 }
 
 // Reflect reflects to Schema from a value.
@@ -145,6 +151,21 @@ func (r *Reflector) ReflectFromType(t reflect.Type) *Schema {
 		Definitions: definitions,
 	}
 	return s
+}
+
+func (r *Reflector) RegisterEnumType(enumType reflect.Type, values []interface{}) error {
+	for _, v := range values {
+		if reflect.TypeOf(v) != enumType {
+			return errors.New(fmt.Sprintf("value (%v) is not %s type", v, enumType.String()))
+		}
+	}
+
+	r.EnumTypes = append(r.EnumTypes, EnumType{
+		Type:   enumType,
+		Values: values,
+	})
+
+	return nil
 }
 
 func (r *Reflector) RegisterDiscriminatorType(baseType reflect.Type, discriminatorField string, ancestors map[string]reflect.Type) error {
@@ -203,6 +224,18 @@ func (r *Reflector) reflectTypeToSchema(definitions Definitions, t reflect.Type)
 			{Type: "string"},
 			{Type: "integer"},
 		}}
+	}
+
+	enumType := r.getEnum(t)
+	if enumType != nil {
+		var defaultValue interface{} = nil
+		if len(enumType.Values) > 0 {
+			defaultValue = enumType.Values[0]
+		}
+		return &Type{
+			Default: defaultValue,
+			Enum:    enumType.Values,
+		}
 	}
 
 	if r.TypeMapper != nil {
@@ -307,6 +340,15 @@ func (r *Reflector) reflectTypeToSchema(definitions Definitions, t reflect.Type)
 func (r *Reflector) getDiscriminator(t reflect.Type) *DiscriminatorType {
 	for _, d := range r.DiscriminatedTypes {
 		if d.BaseType == t {
+			return &d
+		}
+	}
+	return nil
+}
+
+func (r *Reflector) getEnum(t reflect.Type) *EnumType {
+	for _, d := range r.EnumTypes {
+		if d.Type == t {
 			return &d
 		}
 	}

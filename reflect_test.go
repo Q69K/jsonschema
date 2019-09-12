@@ -96,12 +96,31 @@ type CustomTypeField struct {
 	CreatedAt CustomTime
 }
 
+type MyEnum string
+
+const (
+	MyEnumValueA MyEnum = "a"
+	MyEnumValueB MyEnum = "b"
+)
+
+type TestStruct3 struct {
+	MyEnum MyEnum
+}
+
 func TestSchemaGeneration(t *testing.T) {
 	tests := []struct {
 		typ       interface{}
 		reflector *Reflector
 		fixture   string
 	}{
+		{&TestStruct3{}, &Reflector{
+			EnumTypes: []EnumType{
+				{
+					Type:   reflect.TypeOf((*MyEnum)(nil)).Elem(),
+					Values: []interface{}{MyEnumValueA, MyEnumValueB},
+				},
+			},
+		}, "fixtures/struct_enums.json"},
 		{&TestUser{}, &Reflector{}, "fixtures/defaults.json"},
 		{&TestUser{}, &Reflector{AllowAdditionalProperties: true}, "fixtures/allow_additional_props.json"},
 		{&TestUser{}, &Reflector{RequiredFromJSONSchemaTags: true}, "fixtures/required_from_jsontags.json"},
