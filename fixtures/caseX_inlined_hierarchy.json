@@ -1,0 +1,71 @@
+{
+  "$schema": "http://json-schema.org/draft-04/schema#",
+  "$ref": "#/definitions/CaseX_WithInlinedDiscriminatedType",
+  "definitions": {
+    "CaseX_Interface": {
+      "additionalProperties": false,
+      "oneOf": [
+        {
+          "$schema": "http://json-schema.org/draft-04/schema#",
+          "$ref": "#/definitions/CaseX_StructA@typ:typA",
+          "title": "typA"
+        },
+        {
+          "$schema": "http://json-schema.org/draft-04/schema#",
+          "$ref": "#/definitions/CaseX_StructB@typ:typB",
+          "title": "typB"
+        }
+      ]
+    },
+    "CaseX_StructA@typ:typA": {
+      "required": [
+        "typ",
+        "a"
+      ],
+      "properties": {
+        "a": {
+          "type": "string"
+        },
+        "typ": {
+          "enum": [
+            "typA"
+          ],
+          "type": "string",
+          "default": "typA"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "CaseX_StructB@typ:typB": {
+      "required": [
+        "typ",
+        "b"
+      ],
+      "properties": {
+        "b": {
+          "type": "string"
+        },
+        "typ": {
+          "enum": [
+            "typB"
+          ],
+          "type": "string",
+          "default": "typB"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "CaseX_WithInlinedDiscriminatedType": {
+      "additionalProperties": false,
+      "type": "object",
+      "oneOf": [
+        {
+          "$schema": "http://json-schema.org/draft-04/schema#",
+          "$ref": "#/definitions/CaseX_Interface"
+        }
+      ]
+    }
+  }
+}

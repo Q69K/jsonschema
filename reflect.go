@@ -434,10 +434,16 @@ func (r *Reflector) reflectStructFields(st *Type, definitions Definitions, t ref
 	}
 	for i := 0; i < t.NumField(); i++ {
 		f := t.Field(i)
-		name, exist, required := r.reflectFieldName(f)
+		annotation, exist := r.reflectFieldName(f)
+
+		if annotation.Inline {
+			st.AllOf = append(st.AllOf, r.reflectTypeToSchema(definitions, f.Type))
+			continue
+		}
+
 		// if anonymous and exported type should be processed recursively
 		// current type should inherit properties of anonymous one
-		if name == "" {
+		if annotation.Name == "" {
 			if f.Anonymous && !exist {
 				r.reflectStructFields(st, definitions, f.Type)
 			}
@@ -446,10 +452,15 @@ func (r *Reflector) reflectStructFields(st *Type, definitions Definitions, t ref
 
 		property := r.reflectTypeToSchema(definitions, f.Type)
 		property.structKeywordsFromTags(f)
-		st.Properties[name] = property
-		if required {
-			st.Required = append(st.Required, name)
+		st.Properties[annotation.Name] = property
+		if annotation.IsRequired {
+			st.Required = append(st.Required, annotation.Name)
 		}
+	}
+
+	if len(st.AllOf) == 1 && len(st.OneOf) == 0 {
+		st.OneOf = st.AllOf
+		st.AllOf = make([]*Type, 0)
 	}
 }
 
@@ -596,24 +607,23 @@ func requiredFromJSONTags(tags []string) bool {
 		return false
 	}
 
-	for _, tag := range tags[1:] {
-		if tag == "omitempty" {
-			return false
+	return !stringsSliceContains(tags[1:], "omitempty")
+}
+
+func stringsSliceContains(strs []string, item string) bool {
+	for _, s := range strs {
+		if s == item {
+			return true
 		}
 	}
-	return true
+	return false
 }
 
 func requiredFromJSONSchemaTags(tags []string) bool {
 	if ignoredByJSONSchemaTags(tags) {
 		return false
 	}
-	for _, tag := range tags {
-		if tag == "required" {
-			return true
-		}
-	}
-	return false
+	return stringsSliceContains(tags, "required")
 }
 
 func ignoredByJSONTags(tags []string) bool {
@@ -624,7 +634,13 @@ func ignoredByJSONSchemaTags(tags []string) bool {
 	return tags[0] == "-"
 }
 
-func (r *Reflector) reflectFieldName(f reflect.StructField) (string, bool, bool) {
+type fieldAnnotation struct {
+	Name       string
+	IsRequired bool
+	Inline     bool
+}
+
+func (r *Reflector) reflectFieldName(f reflect.StructField) (fieldAnnotation, bool) {
 	jsonTags, exist := f.Tag.Lookup("json")
 	if !exist {
 		jsonTags = f.Tag.Get("yaml")
@@ -633,16 +649,17 @@ func (r *Reflector) reflectFieldName(f reflect.StructField) (string, bool, bool)
 	jsonTagsList := strings.Split(jsonTags, ",")
 
 	if ignoredByJSONTags(jsonTagsList) {
-		return "", exist, false
+		return fieldAnnotation{}, exist
 	}
 
 	jsonSchemaTags := strings.Split(f.Tag.Get("jsonschema"), ",")
 	if ignoredByJSONSchemaTags(jsonSchemaTags) {
-		return "", exist, false
+		return fieldAnnotation{}, exist
 	}
 
 	name := f.Name
 	required := requiredFromJSONTags(jsonTagsList)
+	inlined := stringsSliceContains(jsonTagsList, "inline")
 
 	if r.RequiredFromJSONSchemaTags {
 		required = requiredFromJSONSchemaTags(jsonSchemaTags)
@@ -662,5 +679,5 @@ func (r *Reflector) reflectFieldName(f reflect.StructField) (string, bool, bool)
 		name = ""
 	}
 
-	return name, exist, required
+	return fieldAnnotation{name, required, inlined}, exist
 }
