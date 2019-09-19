@@ -56,17 +56,17 @@
     },
     "TestUser": {
       "required": [
-        "some_base_property",
-        "some_base_property_yaml",
-        "grand",
-        "SomeUntaggedBaseProperty",
         "PublicNonExported",
-        "id",
-        "name",
+        "SomeUntaggedBaseProperty",
         "TestFlag",
+        "a_or_b",
         "age",
         "email",
-        "a_or_b"
+        "grand",
+        "id",
+        "name",
+        "some_base_property",
+        "some_base_property_yaml"
       ],
       "properties": {
         "PublicNonExported": {

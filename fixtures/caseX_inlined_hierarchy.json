@@ -19,8 +19,8 @@
     },
     "CaseX_StructA@typ:typA": {
       "required": [
-        "typ",
-        "a"
+        "a",
+        "typ"
       ],
       "properties": {
         "a": {
@@ -39,8 +39,8 @@
     },
     "CaseX_StructB@typ:typB": {
       "required": [
-        "typ",
-        "b"
+        "b",
+        "typ"
       ],
       "properties": {
         "b": {
@@ -58,14 +58,9 @@
       "type": "object"
     },
     "CaseX_WithInlinedDiscriminatedType": {
-      "additionalProperties": false,
-      "type": "object",
-      "oneOf": [
-        {
-          "$schema": "http://json-schema.org/draft-04/schema#",
-          "$ref": "#/definitions/CaseX_Interface"
-        }
-      ]
+      "$schema": "http://json-schema.org/draft-04/schema#",
+      "$ref": "#/definitions/CaseX_Interface",
+      "additionalProperties": false
     }
   }
 }

@@ -146,32 +146,32 @@ func TestSchemaGeneration(t *testing.T) {
 		reflector *Reflector
 		fixture   string
 	}{
-		//{&TestStruct3{}, &Reflector{
-		//	EnumTypes: []EnumType{
-		//		{
-		//			Type:   reflect.TypeOf((*MyEnum)(nil)).Elem(),
-		//			Values: []interface{}{MyEnumValueA, MyEnumValueB},
-		//		},
-		//	},
-		//}, "fixtures/struct_enums.json"},
-		//{&TestUser{}, &Reflector{}, "fixtures/defaults.json"},
-		//{&TestUser{}, &Reflector{AllowAdditionalProperties: true}, "fixtures/allow_additional_props.json"},
-		//{&TestUser{}, &Reflector{RequiredFromJSONSchemaTags: true}, "fixtures/required_from_jsontags.json"},
-		//{&TestUser{}, &Reflector{ExpandedStruct: true}, "fixtures/defaults_expanded_toplevel.json"},
-		//{&TestUser{}, &Reflector{IgnoredTypes: []interface{}{GrandfatherType{}, A{}, B{}}}, "fixtures/ignore_type.json"},
-		//{&StructWithInline{InlinedStruct{A:"a value"}}, &Reflector{}, "fixtures/inlined_struct.json"},
+		{&TestStruct3{}, &Reflector{
+			EnumTypes: []EnumType{
+				{
+					Type:   reflect.TypeOf((*MyEnum)(nil)).Elem(),
+					Values: []interface{}{MyEnumValueA, MyEnumValueB},
+				},
+			},
+		}, "fixtures/struct_enums.json"},
+		{&TestUser{}, &Reflector{}, "fixtures/defaults.json"},
+		{&TestUser{}, &Reflector{AllowAdditionalProperties: true}, "fixtures/allow_additional_props.json"},
+		{&TestUser{}, &Reflector{RequiredFromJSONSchemaTags: true}, "fixtures/required_from_jsontags.json"},
+		{&TestUser{}, &Reflector{ExpandedStruct: true}, "fixtures/defaults_expanded_toplevel.json"},
+		{&TestUser{}, &Reflector{IgnoredTypes: []interface{}{GrandfatherType{}, A{}, B{}}}, "fixtures/ignore_type.json"},
+		{&StructWithInline{InlinedStruct{A: "a value"}}, &Reflector{}, "fixtures/inlined_struct.json"},
 		{&CaseX_WithInlinedDiscriminatedType{}, registerCaseXHierarchy(&Reflector{}), "fixtures/caseX_inlined_hierarchy.json"},
-		//{&CustomTypeField{}, &Reflector{
-		//	TypeMapper: func(i reflect.Type) *Type {
-		//		if i == reflect.TypeOf(CustomTime{}) {
-		//			return &Type{
-		//				Type:   "string",
-		//				Format: "date-time",
-		//			}
-		//		}
-		//		return nil
-		//	},
-		//}, "fixtures/custom_type.json"},
+		{&CustomTypeField{}, &Reflector{
+			TypeMapper: func(i reflect.Type) *Type {
+				if i == reflect.TypeOf(CustomTime{}) {
+					return &Type{
+						Type:   "string",
+						Format: "date-time",
+					}
+				}
+				return nil
+			},
+		}, "fixtures/custom_type.json"},
 	}
 
 	for _, tt := range tests {

@@ -1,5 +1,4 @@
 {
-  "$schema": "http:\/\/json-schema.org\/draft-04\/schema#",
   "definitions": {
     "AorB": {
       "additionalProperties": false,
@@ -18,8 +17,8 @@
     },
     "A@type:a": {
       "required": [
-        "type",
-        "name_a"
+        "name_a",
+        "type"
       ],
       "properties": {
         "name_a": {
@@ -38,8 +37,8 @@
     },
     "B@type:b": {
       "required": [
-        "type",
-        "name_b"
+        "name_b",
+        "type"
       ],
       "properties": {
         "name_b": {
@@ -70,17 +69,17 @@
     }
   },
   "required": [
-    "some_base_property",
-    "some_base_property_yaml",
-    "grand",
-    "SomeUntaggedBaseProperty",
     "PublicNonExported",
-    "id",
-    "name",
+    "SomeUntaggedBaseProperty",
     "TestFlag",
+    "a_or_b",
     "age",
     "email",
-    "a_or_b"
+    "grand",
+    "id",
+    "name",
+    "some_base_property",
+    "some_base_property_yaml"
   ],
   "properties": {
     "PublicNonExported": {

@@ -134,13 +134,8 @@ func (r *Reflector) Reflect(v interface{}) *Schema {
 func (r *Reflector) ReflectFromType(t reflect.Type) *Schema {
 	definitions := Definitions{}
 	if r.ExpandedStruct {
-		st := &Type{
-			Version:              Version,
-			Type:                 "object",
-			Properties:           map[string]*Type{},
-			AdditionalProperties: r.AllowAdditionalProperties,
-		}
-		r.reflectStructFields(st, definitions, t)
+		st := getStructTypeFromProps(r.reflectStructFields(definitions, t))
+		st.AdditionalProperties = r.AllowAdditionalProperties
 		r.reflectStruct(definitions, t)
 		delete(definitions, t.Name())
 		return &Schema{Type: st, Definitions: definitions}
@@ -374,9 +369,13 @@ func emptyObjectSchema(additionalProperties bool) *Type {
 // Refects a struct to a JSON Schema type.
 func (r *Reflector) reflectStruct(definitions Definitions, t reflect.Type) *Type {
 	isIgnored := r.isIgnored(t)
-	st := emptyObjectSchema(r.AllowAdditionalProperties || isIgnored)
-	if !isIgnored {
-		r.reflectStructFields(st, definitions, t)
+
+	var st *Type
+	if isIgnored {
+		st = emptyObjectSchema(true)
+	} else {
+		st = getStructTypeFromProps(r.reflectStructFields(definitions, t))
+		st.AdditionalProperties = r.AllowAdditionalProperties
 	}
 
 	return addToDefinitions(definitions, t.Name(), st)
@@ -386,14 +385,41 @@ func (r *Reflector) reflectDiscriminatedStruct(definitions Definitions, t reflec
 	defName := fmt.Sprintf("%s@%s:%s", t.Name(), dField, dKey)
 
 	isIgnored := r.isIgnored(t)
-	st := emptyObjectSchema(r.AllowAdditionalProperties || isIgnored)
+
+	var st *Type
+	if isIgnored {
+		st = emptyObjectSchema(true)
+	} else {
+		st = getStructTypeFromProps(r.reflectStructFields(definitions, t))
+		st.AdditionalProperties = r.AllowAdditionalProperties
+	}
 	st.Properties[dField] = getConstStringType(dKey)
 	st.Required = append(st.Required, dField)
-	if !isIgnored {
-		r.reflectStructFields(st, definitions, t)
-	}
 
 	return addToDefinitions(definitions, defName, st)
+}
+
+func getStructTypeFromProps(properties structProperties) *Type {
+	if len(properties) == 1 {
+		for _, prop := range properties {
+			if prop.inlined {
+				return prop.typ
+			}
+		}
+	}
+	st := emptyObjectSchema(false)
+	for name, prop := range properties {
+		if prop.inlined {
+			st.AllOf = append(st.AllOf, prop.typ)
+		} else {
+			st.Properties[name] = prop.typ
+			if prop.required {
+				st.Required = append(st.Required, name)
+			}
+		}
+	}
+	sort.Strings(st.Required)
+	return st
 }
 
 func addToDefinitions(definitions Definitions, name string, typ *Type) *Type {
@@ -425,43 +451,57 @@ func getConstStringType(value string) *Type {
 	}
 }
 
-func (r *Reflector) reflectStructFields(st *Type, definitions Definitions, t reflect.Type) {
+func (r *Reflector) reflectStructFields(definitions Definitions, t reflect.Type) structProperties {
 	if t.Kind() == reflect.Ptr {
 		t = t.Elem()
 	}
 	if t.Kind() != reflect.Struct {
-		return
+		return nil
 	}
+
+	props := make(structProperties)
+
 	for i := 0; i < t.NumField(); i++ {
 		f := t.Field(i)
 		annotation, exist := r.reflectFieldName(f)
-
-		if annotation.Inline {
-			st.AllOf = append(st.AllOf, r.reflectTypeToSchema(definitions, f.Type))
-			continue
-		}
-
-		// if anonymous and exported type should be processed recursively
-		// current type should inherit properties of anonymous one
 		if annotation.Name == "" {
+			// if anonymous and exported type should be processed recursively
+			// current type should inherit properties of anonymous one
 			if f.Anonymous && !exist {
-				r.reflectStructFields(st, definitions, f.Type)
+				props = mergeProperties(props, r.reflectStructFields(definitions, f.Type))
 			}
-			continue
-		}
+		} else {
+			property := r.reflectTypeToSchema(definitions, f.Type)
+			property.structKeywordsFromTags(f)
 
-		property := r.reflectTypeToSchema(definitions, f.Type)
-		property.structKeywordsFromTags(f)
-		st.Properties[annotation.Name] = property
-		if annotation.IsRequired {
-			st.Required = append(st.Required, annotation.Name)
+			props[annotation.Name] = structProperty{
+				typ:      property,
+				required: annotation.IsRequired,
+				inlined:  annotation.Inline,
+			}
 		}
 	}
 
-	if len(st.AllOf) == 1 && len(st.OneOf) == 0 {
-		st.OneOf = st.AllOf
-		st.AllOf = make([]*Type, 0)
+	return props
+}
+
+type structProperty struct {
+	typ      *Type
+	required bool
+	inlined  bool
+}
+
+type structProperties = map[string]structProperty
+
+func mergeProperties(p1 structProperties, p2 structProperties) structProperties {
+	result := make(structProperties)
+	for k, v := range p1 {
+		result[k] = v
 	}
+	for k, v := range p2 {
+		result[k] = v
+	}
+	return result
 }
 
 func (t *Type) structKeywordsFromTags(f reflect.StructField) {

@@ -2,7 +2,7 @@
   "$schema": "http://json-schema.org/draft-04/schema#",
   "$ref": "#/definitions/StructWithInline",
   "definitions": {
-    "StructWithInline": {
+    "InlinedStruct": {
       "required": ["a"],
       "properties": {
         "a": {
@@ -11,6 +11,11 @@
       },
       "additionalProperties": false,
       "type": "object"
+    },
+    "StructWithInline": {
+      "$schema": "http://json-schema.org/draft-04/schema#",
+      "$ref": "#/definitions/InlinedStruct",
+      "additionalProperties": false
     }
   }
 }
